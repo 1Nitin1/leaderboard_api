@@ -9,6 +9,7 @@ const port = Number(process.env.PORT || 3000);
 const maxScores = Number(process.env.MAX_SCORES || 100);
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 const dataFile = path.join(dataDir, 'leaderboard.json');
+let memoryScores = [];
 
 app.use(cors());
 app.use(express.json({ limit: '32kb' }));
@@ -62,6 +63,9 @@ app.use((_req, res) => {
 
 app.use((error, _req, res, _next) => {
   console.error(error);
+  if (error instanceof SyntaxError && 'body' in error) {
+    return res.status(400).json({ error: 'Invalid JSON body' });
+  }
   res.status(500).json({ error: 'Server error' });
 });
 
@@ -74,20 +78,27 @@ async function readScores() {
     const raw = await fs.readFile(dataFile, 'utf8');
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
-      return [];
+      return memoryScores;
     }
-    return parsed.filter(Boolean).map(normalizeEntry).filter(Boolean).sort(compareScores);
+    memoryScores = parsed.filter(Boolean).map(normalizeEntry).filter(Boolean).sort(compareScores);
+    return memoryScores;
   } catch (error) {
     if (error.code === 'ENOENT') {
-      return [];
+      return memoryScores;
     }
-    throw error;
+    console.warn(`Using in-memory scores because ${dataFile} could not be read:`, error.message);
+    return memoryScores;
   }
 }
 
 async function writeScores(scores) {
-  await fs.mkdir(dataDir, { recursive: true });
-  await fs.writeFile(dataFile, `${JSON.stringify(scores, null, 2)}\n`, 'utf8');
+  memoryScores = scores;
+  try {
+    await fs.mkdir(dataDir, { recursive: true });
+    await fs.writeFile(dataFile, `${JSON.stringify(scores, null, 2)}\n`, 'utf8');
+  } catch (error) {
+    console.warn(`Keeping scores in memory because ${dataFile} could not be written:`, error.message);
+  }
 }
 
 function normalizeEntry(value) {
