@@ -106,17 +106,21 @@ function normalizeEntry(value) {
     return null;
   }
 
-  const playerName =
-    typeof value.playerName === 'string' && value.playerName.trim()
-      ? value.playerName.trim().slice(0, 32)
+  const playerNameInput = firstString(
+    value.playerName,
+    value.player,
+    value.name,
+  );
+  const playerName = playerNameInput
+    ? playerNameInput.trim().slice(0, 32)
       : 'Player';
-  const scoreSeconds = toPositiveInt(value.scoreSeconds);
-  const moves = toPositiveInt(value.moves);
-  const gridSize = toPositiveInt(value.gridSize);
-  const difficulty =
-    typeof value.difficulty === 'string' && value.difficulty.trim()
-      ? value.difficulty.trim().slice(0, 24)
-      : null;
+  const scoreSeconds = toPositiveInt(
+    firstDefined(value.scoreSeconds, value.score, value.timeSeconds, value.seconds),
+  );
+  const moves = toPositiveInt(firstDefined(value.moves, value.moveCount));
+  const gridSize = toPositiveInt(firstDefined(value.gridSize, value.grid, value.size));
+  const difficultyInput = firstString(value.difficulty, value.level);
+  const difficulty = difficultyInput ? difficultyInput.trim().slice(0, 24) : null;
 
   if (!scoreSeconds || !moves || !gridSize || !difficulty) {
     return null;
@@ -129,8 +133,26 @@ function normalizeEntry(value) {
     gridSize,
     difficulty,
     timestamp: parseTimestamp(value.timestamp),
-    source: 'online',
+    source: firstString(value.source) || 'online',
   };
+}
+
+function firstDefined(...values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function firstString(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value;
+    }
+  }
+  return null;
 }
 
 function toPositiveInt(value) {
